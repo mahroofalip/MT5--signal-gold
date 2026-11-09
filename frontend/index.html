@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GoldSignal AI</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#121d30;--muted:#9aabc3;--line:#25344c;--green:#31c48d;--red:#f87171;--amber:#fbbf24}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#0b1220,#101a2c);color:#e7eef9;font:15px system-ui,Segoe UI,sans-serif}
+main{max-width:1120px;margin:auto;padding:28px 18px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{font-size:25px;margin:0}.muted{color:var(--muted)}.pill{border:1px solid var(--line);padding:7px 11px;border-radius:99px;font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:18px 0}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 8px 28px #0002}
+.label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.big{font-size:30px;font-weight:700;margin:7px 0}.signal{font-size:24px;font-weight:800}.wait{color:var(--amber)}.buy{color:var(--green)}.sell{color:var(--red)}
+.row{display:flex;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid var(--line)}.row:last-child{border:0}
+input{background:#0b1424;border:1px solid var(--line);color:#fff;border-radius:9px;padding:10px;width:110px}
+button{background:#2459a6;color:white;border:0;padding:10px 14px;border-radius:9px;cursor:pointer}
+.small{font-size:12px;color:var(--muted);line-height:1.55}.notice{border-left:3px solid var(--amber);padding:10px 12px;background:#2b2618;border-radius:7px;margin-top:14px}
+</style></head><body><main>
+<div class="top"><div><h1>◈ GoldSignal AI</h1><div class="muted">Valetax MT5 · XAUUSD swing signal dashboard</div></div><div class="pill" id="connection">● Waiting for MT5 bridge</div></div>
+<div class="grid">
+<section class="card"><div class="label">Instrument</div><div class="big" id="symbol">XAUUSD</div><div class="muted" id="quote">Bid — · Ask —</div></section>
+<section class="card"><div class="label">Current signal</div><div class="signal wait" id="signal">WAIT</div><div class="small" id="reason">Waiting for broker candle data.</div></section>
+<section class="card"><div class="label">Data freshness</div><div class="big" id="fresh">—</div><div class="muted">Last bridge update</div></section>
+</div>
+<div class="grid">
+<section class="card"><div class="label">Trend alignment</div><div class="row"><span>D1 trend</span><b id="d1">—</b></div><div class="row"><span>H4 trend</span><b id="h4">—</b></div><div class="row"><span>H1 momentum</span><b id="mom">—</b></div></section>
+<section class="card"><div class="label">Trade plan (reference only)</div><div class="row"><span>Entry reference</span><b id="entry">—</b></div><div class="row"><span>Stop loss</span><b id="sl">—</b></div><div class="row"><span>TP1 / TP2 / TP3</span><b id="tp">—</b></div><div class="row"><span>RSI(14)</span><b id="rsi">—</b></div></section>
+<section class="card"><div class="label">Position sizing calculator</div><div class="row"><label>Account balance</label><input id="balance" type="number" value="1000" min="0"></div><div class="row"><label>Risk %</label><input id="risk" type="number" value="0.5" min="0.1" max="1" step="0.1"></div><div class="row"><label>Stop distance (price)</label><input id="distance" type="number" value="10" min="0.01" step="0.01"></div><div class="row"><label>Value per $1 move per 1 lot ($)</label><input id="value" type="number" value="100" min="0.01" step="0.01"></div><button onclick="calc()">Calculate indicative lot size</button><div class="big" id="lots">—</div><div class="small">Confirm contract size, tick value, account currency and lot limits with Valetax. This estimate is not broker-verified.</div></section>
+</div>
+<div class="card"><div class="label">Signal engine notes</div><p class="small">D1/H4 EMA50–EMA200 trend filter; H1 EMA20/EMA50, RSI14 and MACD confirmation; H4 ATR-based stop reference. WAIT is intentional when timeframes disagree, data is stale or candle history is insufficient.</p>
+<div class="notice small">Educational prototype only. It does not place, modify or close trades. Signals are not guarantees. Test on a demo account and independently verify all levels before risking money.</div></div>
+<p class="small">Refreshes automatically every 5 seconds · <span id="updated">Not updated yet</span></p>
+</main>
+<script>
+const $=id=>document.getElementById(id), fmt=v=>v==null?'—':Number(v).toFixed(2);
+async function refresh(){try{
+ const [s,g]=await Promise.all([fetch('/api/status').then(r=>r.json()),fetch('/api/signal').then(r=>r.json())]);
+ $('connection').textContent=s.connected?'● MT5 bridge connected':'● '+(s.reason||'Bridge offline');
+ $('connection').style.color=s.connected?'#31c48d':'#fbbf24';$('symbol').textContent=s.symbol||'XAUUSD';
+ $('quote').textContent=`Bid ${fmt(s.bid)} · Ask ${fmt(s.ask)}`;$('fresh').textContent=s.age_seconds==null?'—':s.age_seconds+' sec';
+ $('signal').textContent=g.signal||'WAIT';$('signal').className='signal '+(g.signal==='BUY'?'buy':g.signal==='SELL'?'sell':'wait');
+ $('reason').textContent=g.reason||'No signal reason';$('d1').textContent=g.trend?.D1||'—';$('h4').textContent=g.trend?.H4||'—';
+ $('mom').textContent=g.indicators?`RSI ${g.indicators.RSI14} · MACD ${g.indicators.MACD_hist}`:'—';
+ $('entry').textContent=fmt(g.reference_entry);$('sl').textContent=fmt(g.stop_loss);$('tp').textContent=(g.targets||[]).map(fmt).join(' / ')||'—';
+ $('rsi').textContent=g.indicators?.RSI14??'—';$('updated').textContent='Updated '+new Date().toLocaleTimeString();
+ if(g.risk_distance)$('distance').value=g.risk_distance;
+ }catch(e){$('connection').textContent='● Backend unavailable';} }
+function calc(){let b=+$('balance').value,r=+$('risk').value/100,d=+$('distance').value,v=+$('value').value;
+ let n=(b*r)/(d*v);$('lots').textContent=(Number.isFinite(n)&&n>0?n.toFixed(2)+' lots':'Check inputs');}
+refresh();setInterval(refresh,5000);calc();
+</script></body></html>
